@@ -1,0 +1,7 @@
+#ifndef RUST_ENUM_HEADER__
+#define RUST_ENUM_HEADER__
+
+#include "preprocessor.hpp"
+#include "templates.hpp"
+
+#endif // RUST_ENUM_HEADER__
