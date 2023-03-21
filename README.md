@@ -1,5 +1,5 @@
 # rust-enum
-This library is for those who miss using Rust enums in C++. It will give you the ability to create variants that can be ``match``ed. The only dependency is the [Boost Preprocessor](https://github.com/boostorg/preprocessor) library.
+This library is for those who miss using Rust enums in C++. It will give you the ability to create variants that can be matched. The only dependency is the [Boost Preprocessor](https://github.com/boostorg/preprocessor) library.
 
 ## Usage
 To use ``rust-enum``, you must first create your enum. You can do this with the ``$enum`` macro, like so:
