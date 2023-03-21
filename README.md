@@ -30,4 +30,5 @@ Passing ``_`` as the first argument without passing a name will set the ``defaul
 You can find a working example on Godbolt [here](https://eightfold.godbolt.org/).
 
 ## Notes
+Reassigning values and tuple syntax are currently unsupported.
 If you run into any issues or have an idea, let me know!
