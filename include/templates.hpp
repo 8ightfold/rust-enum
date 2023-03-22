@@ -37,12 +37,11 @@ namespace rust_enum {
     
         template <typename...TT>
         struct enum_bytes {
+            constexpr enum_bytes() = default;
+
             template <typename T, typename...UU>
             constexpr enum_bytes(type_wrapper<T>, UU&&... uu) {
-                if constexpr(requires { new(data) T{ std::forward<UU>(uu)... }; }) {
-                    new(data) T{ std::forward<UU>(uu)... };
-                }
-                else new(data) T(std::forward<UU>(uu)...);
+                new(data) T{ std::forward<UU>(uu)... };
             }
 
             template <typename T>
@@ -53,6 +52,22 @@ namespace rust_enum {
             template <typename T>
             const T* get_as() const noexcept {
                 return std::launder( reinterpret_cast<const T*>(data) );
+            }
+
+            template <typename T>
+            const T copy_as() const noexcept {
+                T t_copy { *get_as<T>() };
+                return t_copy;
+            }
+
+            template <typename T>
+            const T move_as() noexcept {
+                return std::move(*get_as<T>());
+            }
+
+            template <typename T, typename...UU>
+            constexpr void create_as(UU&&...uu) noexcept {
+                new(data) T{ std::forward<UU>(uu)... };
             }
 
             template <typename T>
@@ -68,8 +83,17 @@ namespace rust_enum {
 
     template <typename...TT>
     struct enum_base {
+        constexpr enum_base() = default;
+
         template <typename T, typename...UU>
         constexpr enum_base(type_wrapper<T> t, UU&&... uu) : data(t, std::forward<UU>(uu)...) {}
+
+        constexpr enum_base(enum_base&& b) : data(b.data) {}
+
+        constexpr enum_base& operator=(enum_base&& b) {
+            this->data = b.data;
+            return *this;
+        }
 
         template <typename T>
         T* get_as() noexcept {
@@ -79,6 +103,17 @@ namespace rust_enum {
         template <typename T>
         const T* get_as() const noexcept {
             return data.template get_as<T>();
+        }
+
+        template <typename T, typename Old, typename...UU>
+        constexpr void create_as(UU&&...uu) noexcept {
+            data.template destroy_as<Old>();
+            data.template create_as<T>(std::forward<UU>(uu)...);
+        }
+
+        template <typename T>
+        constexpr enum_base copy_as() const noexcept {
+            return { type_wrapper<T>{}, data.template copy_as<T>() };
         }
 
         template <typename T>
