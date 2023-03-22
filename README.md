@@ -27,7 +27,7 @@ $match(instance,
 The first element in each case is the variant you wish to switch over, and the second is the name of the created instance. 
 Passing ``_`` as the first argument without passing a name will set the ``default`` case.
 
-You can find a working example on Godbolt [here](https://eightfold.godbolt.org/z/b5ejv3cG3).
+You can find a working example on Godbolt [here](https://eightfold.godbolt.org/z/Eob4sdxPG).
 
 ## Notes
 Tuple syntax is currently unsupported.
