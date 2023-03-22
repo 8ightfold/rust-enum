@@ -4,22 +4,9 @@
 #include <new>
 #include <type_traits>
 #include <utility>
+#include "xtraits.hpp"
 
 namespace rust_enum {
-    template <typename T>
-    struct type_wrapper {
-        using type = T;
-    };
-
-    template <std::size_t N>
-    using index_constant = std::integral_constant<std::size_t, N>;
-
-    template <std::size_t N>
-    inline constexpr std::integral_constant<std::size_t, N> I{};
-
-    template <std::size_t N>
-    using seq_t = decltype(std::make_index_sequence<N>{});
-
     namespace meta {
         template <typename T, typename...TT>
         struct enum_data {
