@@ -3,5 +3,6 @@
 
 #include "preprocessor.hpp"
 #include "templates.hpp"
+#include "tuple.hpp"
 
 #endif // RUST_ENUM_HEADER__
