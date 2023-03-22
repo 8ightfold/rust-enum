@@ -109,12 +109,12 @@
     template <__internal __T_v> constexpr auto get_type() const noexcept                    \
     { return __nodes.get(rust_enum::I<static_cast<std::size_t>(__T_v)>); }                  \
     template <__internal __T_v> constexpr decltype(auto) get_with() const noexcept          \
-    { return *__value.get_as<typename decltype(get_type<__T_v>())::type>(); }               \
+    { return *__value.template get_as<typename decltype(get_type<__T_v>())::type>(); }      \
                                                                                             \
     template <__internal __T_v> constexpr auto get_type() noexcept                          \
     { return __nodes.get(rust_enum::I<static_cast<std::size_t>(__T_v)>); }                  \
     template <__internal __T_v> constexpr decltype(auto) get_with() noexcept                \
-    { return *__value.get_as<typename decltype(get_type<__T_v>())::type>(); }
+    { return *__value.template get_as<typename decltype(get_type<__T_v>())::type>(); }
 
 /* Create all */
 #define $REIN_CREATE(name, ls) : rust_enum::enum_tag { $REIN_CREATE_BODY(name, ls) }
