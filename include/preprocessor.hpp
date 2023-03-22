@@ -5,7 +5,9 @@
 // Utils
 #define $REIN_EAT(...)
 #define $REIN_EXP(...) __VA_ARGS__
+#define $REIN_EXP_I(expr) $REIN_EXP expr
 #define $REIN_EATP(expr, ...) expr
+#define $REIN_EAT_NEXT(...) (__VA_ARGS__) $REIN_EAT
 // ---------------------------
 #define $REIN_XCAT(x, y) x ## y
 #define $REIN_CAT(x, y) $REIN_XCAT(x, y)
@@ -17,20 +19,29 @@
 
 /* Sequences */
 #define $REIN_SIZEOF(seq) BOOST_PP_SEQ_SIZE(seq)
-#define $REIN_MSIZEOF(seq) BOOST_PP_DEC(BOOST_PP_SEQ_SIZE(seq))
+// ---------------------------
+#define $REIN_MSIZEOF(seq) BOOST_PP_DEC($REIN_SIZEOF(seq))
 #define $REIN_SEQ_BACK(seq) BOOST_PP_SEQ_HEAD(BOOST_PP_SEQ_REVERSE(seq))
 #define $REIN_IS_EMPTY(cond, t, f) BOOST_PP_IF(BOOST_PP_CHECK_EMPTY(cond), t, f)
 /* Create argument list with final element removed if empty */
+#define $REIN_ARGS_TO_SEQ(...) $REIN_ARGS_TO_SEQ_I(BOOST_PP_TUPLE_TO_SEQ((__VA_ARGS__)))
 #define $REIN_ARGS_TO_SEQ_I(seq)                                                            \
     $REIN_IS_EMPTY($REIN_SEQ_BACK(seq), BOOST_PP_SEQ_POP_BACK(seq), seq)
-#define $REIN_ARGS_TO_SEQ(...) $REIN_ARGS_TO_SEQ_I(BOOST_PP_TUPLE_TO_SEQ((__VA_ARGS__)))
 // ---------------------------
 #define $REIN_CMP_SEQ_SIZE(seq, sz, t, f)                                                   \
     $REIN_EXPAND_IF(BOOST_PP_GREATER_EQUAL($REIN_SIZEOF(seq), sz), t, f)
 /* Get user type or name */
 #define $REIN_EXP_NAME(elem) BOOST_PP_SEQ_ELEM(0, elem)
 #define $REIN_EXP_TYPE(elem)                                                                \
-    $REIN_CMP_SEQ_SIZE(elem, 2, (BOOST_PP_SEQ_ELEM, (1, elem)), (,__internal_type))
+    $REIN_CMP_SEQ_SIZE(elem, 2, ($REIN_EXP_TYPE_I, (elem)), (,__internal_type))
+// ---------------------------
+#define $REIN_EXP_TYPE_I(elem) $REIN_EXP_I($REIN_EXP_TYPE_II(elem))
+#define $REIN_EXP_TYPE_II(elem)                                                             \
+    BOOST_PP_IF($REIN_EXP_TYPE_IS_TUPLE(elem),                                              \
+    (rust_enum::tuple<$REIN_EXP BOOST_PP_SEQ_ELEM(1, elem)>),                               \
+    (BOOST_PP_SEQ_ELEM(1, elem)))
+#define $REIN_EXP_TYPE_IS_TUPLE(elem)                                                       \
+    BOOST_PP_IS_BEGIN_PARENS(BOOST_PP_SEQ_ELEM(1, elem))
 
 
 // Enum internals
@@ -110,14 +121,22 @@
     { return __nodes.get(rust_enum::I<static_cast<std::size_t>(__T_v)>); }                  \
     template <__internal __T_v> constexpr decltype(auto) get_with() const noexcept          \
     { return *__value.template get_as<typename decltype(get_type<__T_v>())::type>(); }      \
-                                                                                            \
     template <__internal __T_v> constexpr auto get_type() noexcept                          \
     { return __nodes.get(rust_enum::I<static_cast<std::size_t>(__T_v)>); }                  \
     template <__internal __T_v> constexpr decltype(auto) get_with() noexcept                \
     { return *__value.template get_as<typename decltype(get_type<__T_v>())::type>(); }
 
 /* Create all */
-#define $REIN_CREATE(name, ls) : rust_enum::enum_tag { $REIN_CREATE_BODY(name, ls) }
+#define $REIN_CREATE(name, ls) : rust_enum::enum_tag                                        \
+    { $REIN_CREATE_BODY(name, $REIN_CREATE_I(ls)) }
+#define $REIN_CREATE_I(ls) BOOST_PP_SEQ_FOR_EACH($REIN_CREATE_IFE,, ls)
+#define $REIN_CREATE_IFE(r,d, elem)                                                         \
+    ((BOOST_PP_SEQ_HEAD(elem)) $REIN_CREATE_IFE_II(elem)($REIN_EAT elem))
+#define $REIN_CREATE_IFE_I(elem_back)                                                       \
+    BOOST_PP_IF(BOOST_PP_GREATER(BOOST_PP_TUPLE_SIZE(elem_back), 1),                        \
+    (elem_back), elem_back)
+#define $REIN_CREATE_IFE_II(elem)                                                           \
+    BOOST_PP_IF(BOOST_PP_CHECK_EMPTY ($REIN_EAT elem), $REIN_EAT, $REIN_CREATE_IFE_I)
 // ---------------------------
 #define $REIN_CREATE_BODY(name, ls)                                                         \
     $REIN_CREATE_ENUM(ls)                                                                   \
@@ -133,9 +152,9 @@ public:                                                                         
 
 // Match internals
 #ifndef USE_REFERENCE_ENUM_CASE
-#  define $REIN_MATCH_SWITCH_CASE_II auto
+#  define $REIN_MATCH_SWITCH_CASE_T auto
 #else
-#  define $REIN_MATCH_SWITCH_CASE_II auto&&
+#  define $REIN_MATCH_SWITCH_CASE_T auto&&
 #endif
 
 /* Switch case body */
@@ -149,8 +168,14 @@ public:                                                                         
     $REIN_CMP_SEQ_SIZE(elem, 3, (;BOOST_PP_SEQ_ELEM, (2, elem)), (BOOST_PP_SEQ_ELEM, (1, elem)))
 // ---------------------------
 #define $REIN_MATCH_SWITCH_CASE_I(value, elem)                                              \
-    $REIN_MATCH_SWITCH_CASE_II BOOST_PP_SEQ_ELEM(1, elem) =                                 \
+    $REIN_MATCH_SWITCH_CASE_T $REIN_MATCH_SWITCH_CASE_II(elem) =                            \
     value.template get_with<$REIN_MATCH_CASE_V(value, elem)>()
+#define $REIN_MATCH_SWITCH_CASE_II(elem) $REIN_EXP_I($REIN_MATCH_SWITCH_CASE_III(elem))
+#define $REIN_MATCH_SWITCH_CASE_III(elem)                                                   \
+    BOOST_PP_IF(BOOST_PP_IS_BEGIN_PARENS(BOOST_PP_SEQ_ELEM(1, elem)),                       \
+    $REIN_MATCH_SWITCH_CASE_IV(elem),                                                       \
+    (BOOST_PP_SEQ_ELEM(1, elem)))
+#define $REIN_MATCH_SWITCH_CASE_IV(elem) ([$REIN_EXP_I(BOOST_PP_SEQ_ELEM(1, elem))])
 
 /* Switch case base */
 #define $REIN_MATCH_BODY(value, ls) BOOST_PP_SEQ_FOR_EACH($REIN_MATCH_BODY_FE, value, ls)
@@ -172,11 +197,24 @@ public:                                                                         
 #define $REIN_CHECK__() 1, 2
 
 /* Match all */
+#define $REIN_MATCH(value, ls) $REIN_MATCH_DER(value)                                       \
+    { switch(value.get_value()) { $REIN_MATCH_BODY(value, $REIN_MATCH_I(ls)) } }
+// ---------------------------
+#define $REIN_MATCH_I(ls) BOOST_PP_SEQ_FOR_EACH($REIN_MATCH_IFE,, ls)
+#define $REIN_MATCH_IFE(r,d, elem)                                                          \
+    ((BOOST_PP_SEQ_HEAD(elem)) $REIN_MATCH_GROUP_TUPLE_ARGS(BOOST_PP_SEQ_TAIL(elem)))
+#define $REIN_MATCH_GROUP_TUPLE_ARGS(elem_tail)                                             \
+    BOOST_PP_IF(BOOST_PP_CHECK_EMPTY($REIN_EAT elem_tail),,                                 \
+    $REIN_MATCH_GROUP_TUPLE_ARGS_I) elem_tail
+#define $REIN_MATCH_GROUP_TUPLE_ARGS_I(...)                                                 \
+    BOOST_PP_IF(BOOST_PP_EQUAL(BOOST_PP_TUPLE_SIZE((__VA_ARGS__)), 1),                      \
+    (__VA_ARGS__), ((__VA_ARGS__)))
+
+// ---------------------------
 #define $REIN_MATCH_DER(value)                                                              \
     if constexpr(std::is_base_of_v<rust_enum::enum_tag,                                     \
     std::remove_cvref_t<decltype(value)>>)
-#define $REIN_MATCH(value, ls) $REIN_MATCH_DER(value)                                       \
-    { switch(value.get_value()) { $REIN_MATCH_BODY(value, ls) } }
+
 
 // Exposed expressions
 #define $enum(name, ...) struct name $REIN_CREATE(name, $REIN_ARGS_TO_SEQ(__VA_ARGS__))
