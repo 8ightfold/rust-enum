@@ -2,7 +2,6 @@
 #define RUST_ENUM_PREPROCESSOR__
 
 #include <boost/preprocessor.hpp>
-
 // Utils
 #define $REIN_EAT(...)
 #define $REIN_EXP(...) __VA_ARGS__
@@ -73,13 +72,36 @@
 
 /* Create destructor function */
 #define $REIN_CREATE_DESTRUCTOR(name, ls)                                                   \
-    ~name() { switch(__type) { BOOST_PP_SEQ_FOR_EACH($REIN_CREATE_DESTRUCTOR_FE, name, ls) } }
+    constexpr void __destroy() noexcept                                                     \
+    { switch(__type) { BOOST_PP_SEQ_FOR_EACH($REIN_CREATE_DESTRUCTOR_FE, name, ls) } }      \
+    ~name() { __destroy(); }
+
 // ---------------------------
 #define $REIN_CREATE_DESTRUCTOR_FE(r, name, elem)                                           \
     case __internal::$REIN_EXP_NAME(elem):                                                  \
     { using __tmp_type =                                                                    \
     typename decltype(get_type<__internal::$REIN_EXP_NAME(elem)>())::type;                  \
-      __value.template destroy_as<std::remove_cvref_t<__tmp_type>>(); break; }
+    __value.template destroy_as<std::remove_cvref_t<__tmp_type>>(); break; }
+
+/* Create copy constructor */
+#define $REIN_CREATE_COPY(name, ls)                                                         \
+    constexpr name(const name& lhs) : __type(lhs.__type)                                    \
+    { switch(__type) { BOOST_PP_SEQ_FOR_EACH($REIN_CREATE_COPY_FE, name, ls) } }
+// ---------------------------
+#define $REIN_CREATE_COPY_FE(r, name, elem)                                                 \
+    case __internal::$REIN_EXP_NAME(elem):                                                  \
+    { using __tmp_type =                                                                    \
+        std::remove_cvref_t<                                                                \
+        typename decltype(get_type<__internal::$REIN_EXP_NAME(elem)>())::type>;             \
+    __value = __value_type{ rust_enum::type_wrapper<__tmp_type>{},                          \
+        *lhs.__value.template get_as<__tmp_type>() };                                       \
+    break; }
+
+/* Create copy assignment */
+#define $REIN_CREATE_COPY_ASSIGN(name, ls)                                                  \
+    constexpr name& operator=(const name& lhs)                                              \
+    { __destroy(); __type = lhs.__type;                                                     \
+    switch(__type) { BOOST_PP_SEQ_FOR_EACH($REIN_CREATE_COPY_FE, name, ls) } return *this; }
 
 /* Create accessors */
 #define $REIN_ACCESS_ENUM()                                                                 \
@@ -99,35 +121,42 @@
 // ---------------------------
 #define $REIN_CREATE_BODY(name, ls)                                                         \
     $REIN_CREATE_ENUM(ls)                                                                   \
+    $REIN_ACCESS_ENUM()                                                                     \
 private:                                                                                    \
     $REIN_CREATE_PRIVATE(name, ls)                                                          \
 public:                                                                                     \
     $REIN_CREATE_CONSTRUCTORS(name, ls)                                                     \
-    $REIN_ACCESS_ENUM()                                                                     \
-    $REIN_CREATE_DESTRUCTOR(name, ls)
+    $REIN_CREATE_DESTRUCTOR(name, ls)                                                       \
+    $REIN_CREATE_COPY(name, ls)                                                             \
+    $REIN_CREATE_COPY_ASSIGN(name, ls)
 
 
 // Match internals
 #ifndef USE_REFERENCE_ENUM_CASE
-#  define $REIN_MATCH_SWITCH_CASE_II(value, elem) auto
+#  define $REIN_MATCH_SWITCH_CASE_II auto
 #else
-#  define $REIN_MATCH_SWITCH_CASE_II(value, elem)                                           \
-    decltype(value.template get_with<$REIN_MATCH_CASE_V(value, elem)>())
+#  define $REIN_MATCH_SWITCH_CASE_II auto&&
 #endif
 
 /* Switch case body */
 #define $REIN_MATCH_SWITCH_CASE(value, elem)                                                \
-    $REIN_MATCH_SWITCH_CASE_I(value, elem); BOOST_PP_SEQ_ELEM(2, elem)
+    $REIN_MATCH_SWITCH_CASE_FN(elem)(value, elem) $REIN_MATCH_SWITCH_CASE_BODY(elem)
+// ---------------------------
+#define $REIN_MATCH_SWITCH_CASE_FN(elem)                                                    \
+    BOOST_PP_IF(BOOST_PP_EQUAL($REIN_SIZEOF(elem), 3), $REIN_MATCH_SWITCH_CASE_I, $REIN_EAT)
+// ---------------------------
+#define $REIN_MATCH_SWITCH_CASE_BODY(elem)                                                  \
+    $REIN_CMP_SEQ_SIZE(elem, 3, (;BOOST_PP_SEQ_ELEM, (2, elem)), (BOOST_PP_SEQ_ELEM, (1, elem)))
 // ---------------------------
 #define $REIN_MATCH_SWITCH_CASE_I(value, elem)                                              \
-    $REIN_MATCH_SWITCH_CASE_II(value, elem)                                                 \
-    BOOST_PP_SEQ_ELEM(1, elem) = value.template get_with<$REIN_MATCH_CASE_V(value, elem)>() \
+    $REIN_MATCH_SWITCH_CASE_II BOOST_PP_SEQ_ELEM(1, elem) =                                 \
+    value.template get_with<$REIN_MATCH_CASE_V(value, elem)>()
 
 /* Switch case base */
 #define $REIN_MATCH_BODY(value, ls) BOOST_PP_SEQ_FOR_EACH($REIN_MATCH_BODY_FE, value, ls)
 #define $REIN_MATCH_BODY_FE(r, value, elem) $REIN_GET_FN(elem)(value, elem)
 #define $REIN_MATCH_EXPLICIT(value, elem)                                                   \
-    case $REIN_MATCH_CASE_V(value, elem):         \
+    case $REIN_MATCH_CASE_V(value, elem):                                                   \
     { $REIN_MATCH_SWITCH_CASE(value, elem); break; }
 // ---------------------------
 #define $REIN_MATCH_CASE_V(value, elem)                                                     \
@@ -143,7 +172,11 @@ public:                                                                         
 #define $REIN_CHECK__() 1, 2
 
 /* Match all */
-#define $REIN_MATCH(value, ls) switch(value.get_value()) { $REIN_MATCH_BODY(value, ls) }
+#define $REIN_MATCH_DER(value)                                                              \
+    if constexpr(std::is_base_of_v<rust_enum::enum_tag,                                     \
+    std::remove_cvref_t<decltype(value)>>)
+#define $REIN_MATCH(value, ls) $REIN_MATCH_DER(value)                                       \
+    { switch(value.get_value()) { $REIN_MATCH_BODY(value, ls) } }
 
 // Exposed expressions
 #define $enum(name, ...) struct name $REIN_CREATE(name, $REIN_ARGS_TO_SEQ(__VA_ARGS__))
