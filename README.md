@@ -30,7 +30,13 @@ $match(instance,
 The first element in each case is the variant you wish to switch over, and the second is the name of the created instance. 
 Passing ``_`` as the first argument without passing a name will set the ``default`` case.
 
-You can find a working example on Godbolt [here](https://eightfold.godbolt.org/z/35aMK8Ezr).
+``$match`` also works with virtuals. The syntax is the same, and can be used out of the box (no custom definitions required).
+
+### Tips
+While the ``$match`` macro is pretty, but isn't the most efficient. It has to generate paths for ``$enum`` and virtuals, even though only one is taken.
+To speed up preprocessing, you can use ``$fmatch`` for ``$enum``s, and ``$vmatch`` for virtuals. These will take a lot less time to process.
+
+You can find a working example on Godbolt [here](https://godbolt.org/z/vdqssGsGv).
 
 ## Notes
 If you run into any issues or have an idea, let me know!
