@@ -2,6 +2,14 @@
 #define RUST_ENUM_PREPROCESSOR__
 
 #include <boost/preprocessor.hpp>
+#include "meta/match.hpp"
+
+// Exposed expressions
+#define $enum(name, ...) struct name $REIN_CREATE(name, $REIN_ARGS_TO_SEQ(__VA_ARGS__))
+#define $match(value, ...)  $REIN_MATCH(value,  $REIN_ARGS_TO_SEQ(__VA_ARGS__))
+#define $fmatch(value, ...) $REIN_FMATCH(value, $REIN_ARGS_TO_SEQ(__VA_ARGS__))
+#define $vmatch(value, ...) $REIN_VMATCH(value, $REIN_ARGS_TO_SEQ(__VA_ARGS__))
+
 // Utils
 #define $REIN_EAT(...)
 #define $REIN_EXP(...) __VA_ARGS__
@@ -11,6 +19,11 @@
 // ---------------------------
 #define $REIN_XCAT(x, y) x ## y
 #define $REIN_CAT(x, y) $REIN_XCAT(x, y)
+#define $REIN_LOCAL(fn) $REIN_CAT(fn, __LINE__)
+// ---------------------------
+#define $REIN_APPLY(fn, ...) BOOST_PP_SEQ_FOR_EACH(                                         \
+    $REIN_APPLY_I, fn, $REIN_ARGS_TO_SEQ(__VA_ARGS__))
+#define $REIN_APPLY_I(r, fn, elem) fn(elem);
 /* Apply first element to second if true: $REIN_EXPAND_IF( cond, (tex, (...)), (fex, (...)) ) */
 #define $REIN_EXPAND_IF_I(expr, args) expr args
 #define $REIN_EXPAND_IF(cond, t, f)                                                         \
@@ -148,76 +161,5 @@ public:                                                                         
     $REIN_CREATE_DESTRUCTOR(name, ls)                                                       \
     $REIN_CREATE_COPY(name, ls)                                                             \
     $REIN_CREATE_COPY_ASSIGN(name, ls)
-
-
-// Match internals
-#ifndef USE_REFERENCE_ENUM_CASE
-#  define $REIN_MATCH_SWITCH_CASE_T auto
-#else
-#  define $REIN_MATCH_SWITCH_CASE_T auto&&
-#endif
-
-/* Switch case body */
-#define $REIN_MATCH_SWITCH_CASE(value, elem)                                                \
-    $REIN_MATCH_SWITCH_CASE_FN(elem)(value, elem) $REIN_MATCH_SWITCH_CASE_BODY(elem)
-// ---------------------------
-#define $REIN_MATCH_SWITCH_CASE_FN(elem)                                                    \
-    BOOST_PP_IF(BOOST_PP_EQUAL($REIN_SIZEOF(elem), 3), $REIN_MATCH_SWITCH_CASE_I, $REIN_EAT)
-// ---------------------------
-#define $REIN_MATCH_SWITCH_CASE_BODY(elem)                                                  \
-    $REIN_CMP_SEQ_SIZE(elem, 3, (;BOOST_PP_SEQ_ELEM, (2, elem)), (BOOST_PP_SEQ_ELEM, (1, elem)))
-// ---------------------------
-#define $REIN_MATCH_SWITCH_CASE_I(value, elem)                                              \
-    $REIN_MATCH_SWITCH_CASE_T $REIN_MATCH_SWITCH_CASE_II(elem) =                            \
-    value.template get_with<$REIN_MATCH_CASE_V(value, elem)>()
-#define $REIN_MATCH_SWITCH_CASE_II(elem) $REIN_EXP_I($REIN_MATCH_SWITCH_CASE_III(elem))
-#define $REIN_MATCH_SWITCH_CASE_III(elem)                                                   \
-    BOOST_PP_IF(BOOST_PP_IS_BEGIN_PARENS(BOOST_PP_SEQ_ELEM(1, elem)),                       \
-    $REIN_MATCH_SWITCH_CASE_IV(elem),                                                       \
-    (BOOST_PP_SEQ_ELEM(1, elem)))
-#define $REIN_MATCH_SWITCH_CASE_IV(elem) ([$REIN_EXP_I(BOOST_PP_SEQ_ELEM(1, elem))])
-
-/* Switch case base */
-#define $REIN_MATCH_BODY(value, ls) BOOST_PP_SEQ_FOR_EACH($REIN_MATCH_BODY_FE, value, ls)
-#define $REIN_MATCH_BODY_FE(r, value, elem) $REIN_GET_FN(elem)(value, elem)
-#define $REIN_MATCH_EXPLICIT(value, elem)                                                   \
-    case $REIN_MATCH_CASE_V(value, elem):                                                   \
-    { $REIN_MATCH_SWITCH_CASE(value, elem); break; }
-// ---------------------------
-#define $REIN_MATCH_CASE_V(value, elem)                                                     \
-    std::remove_cvref_t<decltype(value)>::__internal::BOOST_PP_SEQ_HEAD(elem)
-// ---------------------------
-#define $REIN_MATCH_DEFAULT(value, elem) default: { $REIN_SEQ_BACK(elem) }
-/* Match _ */
-#define $REIN_GET_FN(elem) $REIN_CHECK(BOOST_PP_SEQ_HEAD(elem))
-#define $REIN_CHECK(name)                                                                   \
-    BOOST_PP_IF($REIN_CHECK_COND(name), $REIN_MATCH_EXPLICIT, $REIN_MATCH_DEFAULT)
-#define $REIN_CHECK_COND(name)                                                              \
-    BOOST_PP_EQUAL(BOOST_PP_TUPLE_SIZE(($REIN_CAT($REIN_CHECK_, name)())), 1)
-#define $REIN_CHECK__() 1, 2
-
-/* Match all */
-#define $REIN_MATCH(value, ls) $REIN_MATCH_DER(value)                                       \
-    { switch(value.get_value()) { $REIN_MATCH_BODY(value, $REIN_MATCH_I(ls)) } }
-// ---------------------------
-#define $REIN_MATCH_I(ls) BOOST_PP_SEQ_FOR_EACH($REIN_MATCH_IFE,, ls)
-#define $REIN_MATCH_IFE(r,d, elem)                                                          \
-    ((BOOST_PP_SEQ_HEAD(elem)) $REIN_MATCH_GROUP_TUPLE_ARGS(BOOST_PP_SEQ_TAIL(elem)))
-#define $REIN_MATCH_GROUP_TUPLE_ARGS(elem_tail)                                             \
-    BOOST_PP_IF(BOOST_PP_CHECK_EMPTY($REIN_EAT elem_tail),,                                 \
-    $REIN_MATCH_GROUP_TUPLE_ARGS_I) elem_tail
-#define $REIN_MATCH_GROUP_TUPLE_ARGS_I(...)                                                 \
-    BOOST_PP_IF(BOOST_PP_EQUAL(BOOST_PP_TUPLE_SIZE((__VA_ARGS__)), 1),                      \
-    (__VA_ARGS__), ((__VA_ARGS__)))
-
-// ---------------------------
-#define $REIN_MATCH_DER(value)                                                              \
-    if constexpr(std::is_base_of_v<rust_enum::enum_tag,                                     \
-    std::remove_cvref_t<decltype(value)>>)
-
-
-// Exposed expressions
-#define $enum(name, ...) struct name $REIN_CREATE(name, $REIN_ARGS_TO_SEQ(__VA_ARGS__))
-#define $match(value, ...) $REIN_MATCH(value, $REIN_ARGS_TO_SEQ(__VA_ARGS__))
 
 #endif // RUST_ENUM_PREPROCESSOR__
